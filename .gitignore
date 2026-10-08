@@ -1,5 +1,7 @@
 node_modules/
 dist/
-*.db
-*.log
+*.local
 .env
+packages/web/scripts/raw/
+server-data/
+coverage/

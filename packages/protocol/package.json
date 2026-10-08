@@ -1,0 +1,16 @@
+{
+  "name": "@xzs/protocol",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xzs/engine": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
