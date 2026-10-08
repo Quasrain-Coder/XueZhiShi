@@ -1,0 +1,24 @@
+{
+  "name": "xuezhishi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "《雪之时 / Snow Time》桌游的浏览器实现（多人 + LLM AI + 赛后复盘）",
+  "type": "module",
+  "workspaces": [
+    "packages/engine",
+    "packages/protocol",
+    "packages/server",
+    "packages/web",
+    "packages/llm"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:server": "npm run dev -w @xzs/server",
+    "dev:web": "npm run dev -w @xzs/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
