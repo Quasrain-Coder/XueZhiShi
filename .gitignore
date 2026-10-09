@@ -5,3 +5,4 @@ dist/
 packages/web/scripts/raw/
 server-data/
 coverage/
+apps/

@@ -4,7 +4,6 @@ import type { RoomInfo, ViewState } from '@xzs/protocol';
 import { net } from '../net.js';
 import { COLOR_CSS, COLOR_NAMES } from '../theme.js';
 import { BoardView } from '../components/BoardView.js';
-import { TrackView } from '../components/TrackView.js';
 import { CardView } from '../components/CardView.js';
 
 export function Game({ room, state }: { room: RoomInfo; state: ViewState }) {
@@ -68,20 +67,8 @@ export function Game({ room, state }: { room: RoomInfo; state: ViewState }) {
       </header>
 
       <div className="game-main">
-        <aside className="game-left">
-          <TrackView state={state} />
-        </aside>
-
         <section className="game-center">
-          {state.winner ? (
-            <div className="winner-banner">
-              🏆 {COLOR_NAMES[state.winner]} 色获胜！
-              <button className="link" onClick={() => net.leave()}>
-                返回首页
-              </button>
-            </div>
-          ) : (
-            current &&
+          {state.winner ? null : current &&
             me && (
               <div className="prompt" style={{ borderColor: COLOR_CSS[current.seat] }}>
                 {current.kind === 'submit' && (
@@ -110,8 +97,7 @@ export function Game({ room, state }: { room: RoomInfo; state: ViewState }) {
                   </>
                 )}
               </div>
-            )
-          )}
+            )}
           <BoardView state={state} />
         </section>
 

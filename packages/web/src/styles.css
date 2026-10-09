@@ -164,15 +164,19 @@ select {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(27, 109, 124, 0.25), transparent 60%),
+    var(--bg);
 }
 .game-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 16px;
-  background: var(--panel);
+  padding: 6px 16px;
+  background: rgba(10, 34, 38, 0.85);
   border-bottom: 1px solid #1d4a53;
   font-size: 14px;
+  z-index: 5;
 }
 .dice {
   margin-left: 10px;
@@ -201,121 +205,110 @@ select {
   flex: 1;
   display: flex;
   min-height: 0;
-}
-.game-left {
-  width: 220px;
-  overflow-y: auto;
-  background: var(--panel);
-  border-right: 1px solid #1d4a53;
-  padding: 8px;
+  position: relative;
 }
 .game-center {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  overflow: auto;
-  padding: 8px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 6px;
+  min-width: 0;
+  position: relative;
 }
 .game-right {
   width: 300px;
   display: flex;
   flex-direction: column;
-  background: var(--panel);
+  background: rgba(10, 34, 38, 0.88);
   border-left: 1px solid #1d4a53;
-}
-
-/* 计分轨 */
-.track {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.track-space {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel2);
-  border-radius: 6px;
-  padding: 2px 6px;
-  min-height: 30px;
-}
-.track-start,
-.track-finish {
-  outline: 1px solid var(--accent);
-}
-.track-idx {
-  width: 20px;
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-}
-.track-bonus {
-  width: 22px;
-  height: 24px;
-  object-fit: cover;
-  border-radius: 3px;
-}
-.track-totems {
-  display: flex;
-  gap: 3px;
-  margin-left: auto;
-}
-.track-totems img {
-  height: 26px;
-  border-radius: 3px;
-  border: 1px solid transparent;
+  z-index: 4;
 }
 
 /* 版图 */
 .prompt {
-  background: var(--panel);
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: rgba(10, 34, 38, 0.92);
   border: 2px solid var(--accent);
   border-radius: 10px;
-  padding: 10px 18px;
-  margin-bottom: 8px;
+  padding: 8px 18px;
   display: flex;
   gap: 10px;
   align-items: center;
   font-size: 15px;
+  white-space: nowrap;
 }
 .prompt-seats {
   color: var(--muted);
   font-size: 13px;
 }
-.winner-banner {
-  background: linear-gradient(90deg, #7c5a00, #b88a00);
-  border-radius: 10px;
-  padding: 14px 24px;
-  margin-bottom: 8px;
-  font-size: 20px;
-  font-weight: 700;
-}
 .board-wrap {
   position: relative;
-  height: calc(100vh - 260px);
-  min-height: 420px;
+  height: 100%;
+  aspect-ratio: 480 / 1010;
+  container-type: size;
 }
 .board-img {
+  width: 100%;
   height: 100%;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
 }
+.board-winner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 20, 24, 0.55);
+  border-radius: 8px;
+  font-size: 6cqh;
+  font-weight: 900;
+  color: var(--accent);
+  text-shadow: 0 2px 12px #000;
+}
+
+/* 轨道上的图腾（原版布局），随版图等比缩放 */
+.track-totem-stack {
+  position: absolute;
+  transform: translate(-50%, -88%);
+  display: flex;
+  align-items: flex-end;
+}
+.track-totem {
+  height: 3.2cqh;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7));
+}
+
 .level-fruits {
   position: absolute;
   display: flex;
-  gap: 2px;
-  transform: translate(-50%, -50%);
+  gap: 0.3cqw;
 }
 .level-fruits img {
-  width: 26px;
+  width: 6.2cqw;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
 }
 .level-chars {
   position: absolute;
   display: flex;
-  gap: 4px;
-  transform: translateY(-50%);
+  gap: 1cqw;
+}
+.level-chars .card {
+  width: 9.5cqw;
+  height: auto;
+  aspect-ratio: 84 / 118;
+  border-width: 2px;
+}
+.level-chars .card .card-number {
+  font-size: 4.4cqw;
 }
 
 /* 玩家与日志 */
