@@ -46,12 +46,23 @@ export class HeuristicAgent implements PlayerAgent {
     return (h % 10) / 25; // 0 ~ 0.36
   }
 
+  /** 座位性格：果实优先 / 法力站位 / 均衡，打破对称。 */
+  private personality(seat: ColorId): { fruitW: number; manaW: number } {
+    let h = 0;
+    for (const ch of seat) h = (h * 13 + ch.charCodeAt(0)) % 997;
+    const kind = h % 3;
+    return kind === 0 ? { fruitW: 3.6, manaW: 0.7 } : kind === 1 ? { fruitW: 2.2, manaW: 1.8 } : { fruitW: 3.0, manaW: 1.2 };
+  }
+
   private scoreSubmit(state: GameState, seat: ColorId, card: CardId): number {
     if (isCharacter(card)) {
+      const { fruitW, manaW } = this.personality(seat);
       const fruit = state.treeFruit[card - 1] ?? 0;
-      const manaStance = card <= 2 ? 1.2 : card <= 4 ? 0.4 : 0;
-      // 高位牌留着抢高层果实；轻微保留倾向
-      return fruit * 3 + manaStance + card * 0.05 + this.jitter(state, seat, card);
+      const manaStance = card <= 2 ? 1.2 * manaW : card <= 4 ? 0.4 * manaW : 0;
+      // 高位牌留着抢高层果实；轻微保留倾向 + 偏好层打散对称
+      const preferred = ((seat.charCodeAt(0) * 7 + state.round * 3) % 7) + 1;
+      const preferBonus = card === preferred ? 1.4 : 0;
+      return fruit * fruitW + manaStance + card * 0.05 + preferBonus + this.jitter(state, seat, card);
     }
     const me = state.players.find((p) => p.color === seat);
     const others = state.players.filter((p) => p.color !== seat);
