@@ -1,4 +1,4 @@
-import { COLORS, type Action, type ColorId, type GameState, applyAction, enumerateActions, newGame } from '@xzs/engine';
+import { COLORS, agentViewFor, type Action, type ColorId, type GameState, applyAction, enumerateActions, newGame } from '@xzs/engine';
 import type { RoomInfo, SeatInfo, SeatKind, ViewState } from '@xzs/protocol';
 import { ClaudeAgent, SimulationAgent, type PlayerAgent } from '@xzs/llm';
 import { randomBytes } from 'node:crypto';
@@ -157,9 +157,9 @@ export class Room {
       const seatLegal = legal.filter((a) => a.player === aiAction.player);
       let action: Action;
       try {
-        action = await agent.chooseAction(this.state, seatLegal, aiAction.player);
+        action = await agent.chooseAction(this.agentView(aiAction.player), seatLegal, aiAction.player);
       } catch {
-        action = await new SimulationAgent().chooseAction(this.state, seatLegal, aiAction.player);
+        action = await new SimulationAgent().chooseAction(this.agentView(aiAction.player), seatLegal, aiAction.player);
       }
       try {
         this.apply(aiAction.player, action);
@@ -173,21 +173,27 @@ export class Room {
   /** 座位视角过滤：隐藏本轮未亮开的暗扣牌与 watcher 追加牌。 */
   viewFor(clientId: string | null): ViewState {
     if (!this.state) throw new Error('对局未开始');
-    const mine = new Set(this.seatOf(clientId ?? '').map((s) => s.color));
+    const mine = this.seatOf(clientId ?? '').map((s) => s.color);
     const view = JSON.parse(JSON.stringify(this.state)) as ViewState;
     view.you = clientId ? (this.seatOf(clientId)[0]?.color ?? null) : null;
     view.yours = clientId ? this.seatOf(clientId).map((s) => s.color) : [];
     if (!view.revealed) {
       for (const c of Object.keys(view.submissions) as ColorId[]) {
-        if (!mine.has(c)) view.submissions[c] = 'healer'; // 占位，前端只显示「已暗扣」
+        if (!mine.includes(c)) view.submissions[c] = 'healer'; // 占位，前端只显示「已暗扣」
       }
     }
     if (view.phase === 'watcher') {
       for (const c of Object.keys(view.watcherCards) as ColorId[]) {
-        if (!mine.has(c)) delete view.watcherCards[c];
+        if (!mine.includes(c)) delete view.watcherCards[c];
       }
     }
     return view;
+  }
+
+  /** AI 决策视图：严格过滤（见 engine/agentViewFor）。 */
+  agentView(color: ColorId): GameState {
+    if (!this.state) throw new Error('对局未开始');
+    return agentViewFor(this.state, color);
   }
 }
 

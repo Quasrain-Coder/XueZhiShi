@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, enumerateActions, newGame, type ColorId } from '@xzs/engine';
+import { agentViewFor, applyAction, enumerateActions, newGame, type ColorId } from '@xzs/engine';
 import { HeuristicAgent, RandomAgent } from '../src/index.js';
 
 const SEATS: ColorId[] = ['red', 'blue', 'yellow', 'gray'];
@@ -30,7 +30,7 @@ describe('agents', () => {
       expect(legal.length).toBeGreaterThan(0);
       const seat = legal[0]!.player;
       const seatLegal = legal.filter((a) => a.player === seat);
-      const a = await agent.chooseAction(s, seatLegal, seat);
+      const a = await agent.chooseAction(agentViewFor(s, seat), seatLegal, seat);
       s = applyAction(s, a);
       steps++;
     }
