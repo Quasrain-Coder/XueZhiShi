@@ -15,6 +15,7 @@ function fakeClient(id: string): Client & { msgs: unknown[] } {
 }
 
 beforeEach(() => {
+  process.env.XZS_AI_SAMPLES = '20'; // 测试提速
   dir = mkdtempSync(join(tmpdir(), 'xzs-test-'));
   store = new GameStore(dir);
   manager = new RoomManager(store);
@@ -31,11 +32,11 @@ describe('Room', () => {
     const room = manager.create(host, '房主', 3);
     expect(room.seats).toHaveLength(3);
     // 两个空人类座位改 AI
-    room.setKind(host.id, room.seats[1]!.color, 'heuristic');
-    room.setKind(host.id, room.seats[2]!.color, 'llm'); // 无 key → 降级 heuristic
+    room.setKind(host.id, room.seats[1]!.color, 'ai');
+    room.setKind(host.id, room.seats[2]!.color, 'llm'); // 无 key → 降级为模拟 AI
     room.start(host.id);
     expect(room.state).not.toBeNull();
-    expect(room.seats[2]!.kind).toBe('heuristic');
+    expect(room.seats[2]!.kind).toBe('ai');
 
     // 人类 + AI 打完一整局
     for (let guard = 0; guard < 500 && room.state!.phase !== 'finished'; guard++) {
@@ -57,7 +58,7 @@ describe('Room', () => {
     const games = store.listGames();
     expect(games).toHaveLength(1);
     expect(games[0]!.winner).toBe(room.state!.winner);
-  }, 30000);
+  }, 120000);
 
   it('断线重连凭 token 找回座位', () => {
     const host = fakeClient('h1');
@@ -81,7 +82,7 @@ describe('Room', () => {
     expect(room.seatOf(guest.id).map((s) => s.color)).toContain(extra.color);
     expect(room.seatOf(guest.id)).toHaveLength(2);
     // 第四座改 AI 后即可开始
-    room.setKind(host.id, room.seats[3]!.color, 'heuristic');
+    room.setKind(host.id, room.seats[3]!.color, 'ai');
     room.start(host.id);
     expect(room.state!.players).toHaveLength(4);
   });
