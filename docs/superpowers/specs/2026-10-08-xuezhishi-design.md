@@ -79,6 +79,10 @@ newGame(colors, seed): GameState
   采样 K 组对手暗拍（按静态价值加权），用引擎精确模拟整回合结算取期望收益最大者；
   watcher/healer 阶段信息全知，逐候选精确模拟取最优。收益函数：自身计分轨进展为主，
   弃牌损失/对手进展/手牌弹性为辅。采样用注入种子保证确定性（重放一致）
+- **多样性与拟人化**（2026-10-09 迭代）：Boltzmann 择牌（只对「最优 EV − margin」内的
+  近平局候选按温度采样，明显最优不受影响）+ 座位性格（小幅永久偏好，只够打破平局）。
+  自对局「全 AI 同回合出同牌」率 19% → 7%；战术性撞层（互殴得分）保持不变。
+  温度/边界可用 XZS_AI_TEMPERATURE / XZS_AI_MARGIN 调，→ 0 退化为纯 argmax
 - `ClaudeAgent`（可选，`ANTHROPIC_API_KEY`）：结构化局势摘要 + 候选行动列表，tool use 强制返回候选编号；非法 → 重试一次 → 降级 SimulationAgent
 - 服务器在 AI 座位需要决策时驱动 agent，连续异常降级，对局永不卡死
 - 基准：`packages/llm/bench/sim-bench.ts`（`npx tsx bench/sim-bench.ts [局数] [采样数]`），

@@ -21,26 +21,25 @@ import type { PlayerAgent } from './index.js';
  * - watcher/healer 阶段：信息全知，对每个候选精确模拟取最优
  *
  * 模拟内嵌贪婪的子决策（watcher 追加、healer 回收），采样用注入种子保证确定性。
+ *
+ * 随机性与多样性（避免全 AI 对称撞层）：
+ * 1. Boltzmann 择牌：只在「最优 EV − margin」内的候选中按温度采样，差距大选点仍确定，
+ *    差距小（近似等价）时随机化（种子注入，重放一致）
+ * 2. 座位性格：对角色牌加小幅永久偏好（冲高/蹲低/均衡），只够打破近似平局，
+ *    不足以覆盖真实 EV 差距
  */
 export class SimulationAgent implements PlayerAgent {
   readonly name = 'simulation';
-  /** 采样数可用 XZS_AI_SAMPLES 覆盖（按机器性能调）。 */
-  constructor(private samples = Number(process.env.XZS_AI_SAMPLES ?? 120)) {}
+  constructor(
+    private samples = Number(process.env.XZS_AI_SAMPLES ?? 120),
+    private temperature = Number(process.env.XZS_AI_TEMPERATURE ?? 4),
+    private margin = Number(process.env.XZS_AI_MARGIN ?? 6),
+  ) {}
 
   async chooseAction(state: GameState, legal: Action[], seat: ColorId): Promise<Action> {
     if (legal.length === 1) return legal[0]!;
-    let best: Action | null = null;
-    let bestV = -Infinity;
-    let salt = 0;
-    for (const a of legal) {
-      const v = this.evaluate(state, a, seat, salt++);
-      if (v > bestV) {
-        bestV = v;
-        best = a;
-      }
-    }
-    if (!best) throw new Error('no legal action');
-    return best;
+    const evs = legal.map((a, i) => ({ action: a, value: this.evaluate(state, a, seat, i) }));
+    return boltzmannPick(evs, mixSeed(state, seat, 999), this.temperature, this.margin).action;
   }
 
   private evaluate(state: GameState, action: Action, seat: ColorId, salt: number): number {
@@ -51,7 +50,7 @@ export class SimulationAgent implements PlayerAgent {
       const after = autoResolve(applyAction(base, action));
       return payoff(base, after, seat);
     }
-    // submit：采样对手暗拍
+    // submit：采样对手暗拍；座位性格只影响近平局的取向
     let rng = mixSeed(base, seat, salt);
     let total = 0;
     for (let k = 0; k < this.samples; k++) {
@@ -65,7 +64,7 @@ export class SimulationAgent implements PlayerAgent {
       const sim = applyAllSubmissions(base, plays);
       total += payoff(base, autoResolve(sim), seat);
     }
-    return total / this.samples;
+    return total / this.samples + personaBias(seat, action.card);
   }
 }
 
@@ -76,10 +75,50 @@ function mixSeed(state: GameState, seat: ColorId, salt: number): number {
   return h >>> 0;
 }
 
+/**
+ * Boltzmann 择牌：只考虑「最优 EV − margin」内的候选，按温度加权采样。
+ * 温度 → 0 退化为 argmax；margin 保证明显的最优解不受随机化影响。
+ */
+export function boltzmannPick<T extends { value: number }>(
+  items: T[],
+  seed: number,
+  temperature = 4,
+  margin = 6,
+): T {
+  if (items.length <= 1) return items[0]!;
+  const best = Math.max(...items.map((i) => i.value));
+  const pool = items.filter((i) => i.value >= best - margin);
+  if (pool.length <= 1) return pool[0] ?? items[0]!;
+  const { value, state } = nextRandom(seed);
+  void state;
+  const weights = pool.map((i) => Math.exp((i.value - best) / temperature));
+  const sum = weights.reduce((a, b) => a + b, 0);
+  let pick = value * sum;
+  for (let i = 0; i < pool.length; i++) {
+    pick -= weights[i]!;
+    if (pick <= 0) return pool[i]!;
+  }
+  return pool[pool.length - 1]!;
+}
+
+/**
+ * 座位性格：角色牌小幅永久偏好（冲高/蹲低/均衡），幅度 ≤0.8，
+ * 只用于打破近平局，不覆盖真实 EV 差距。
+ */
+export function personaBias(seat: ColorId, card: CardId): number {
+  if (!isCharacter(card)) return 0;
+  let h = 0;
+  for (const ch of seat) h = (h * 13 + ch.charCodeAt(0)) % 997;
+  const style = h % 3; // 0 冲高 1 蹲低 2 均衡
+  if (style === 0) return card >= 6 ? 0.8 : card <= 3 ? -0.4 : 0;
+  if (style === 1) return card <= 2 ? 0.8 : card >= 6 ? -0.4 : 0;
+  return 0;
+}
+
 /** 对手暗拍建模：按静态价值加权采样（果实/法力站位/特殊牌场景价值）。 */
 function sampleOpponentCard(state: GameState, color: ColorId, rand: number): CardId {
   const p = playerOf(state, color);
-  const weights = p.hand.map((c) => Math.max(0.05, staticScore(state, p.color, c)));
+  const weights = p.hand.map((c) => Math.max(0.05, staticScore(state, p.color, c) + personaBias(p.color, c)));
   const sum = weights.reduce((a, b) => a + b, 0);
   let pick = rand * sum;
   for (let i = 0; i < p.hand.length; i++) {
