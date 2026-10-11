@@ -10,5 +10,5 @@ export interface PlayerAgent {
 
 export { RandomAgent } from './random.js';
 export { HeuristicAgent } from './heuristic.js';
-export { SimulationAgent } from './simulation.js';
+export { SimulationAgent, boltzmannPick, personaBias } from './simulation.js';
 export { ClaudeAgent } from './claude.js';

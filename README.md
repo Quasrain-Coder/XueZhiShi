@@ -42,6 +42,9 @@ npm run dev:web      # vite :5173（/ws 代理到 8787）
 |---|---|---|
 | `XZS_PORT` | 8787 | 服务端口 |
 | `XZS_DATA_DIR` | `./server-data` | SQLite 数据目录 |
+| `XZS_AI_SAMPLES` | 120 | 模拟 AI 暗拍采样数（越高越强越慢） |
+| `XZS_AI_TEMPERATURE` | 4 | 模拟 AI 择牌温度（0 = 纯最优、无随机性） |
+| `XZS_AI_MARGIN` | 6 | 近平局边界：仅最优 EV − margin 内的候选参与随机 |
 | `ANTHROPIC_API_KEY` | — | 配置后大厅可设 LLM 座位 |
 | `XZS_LLM_MODEL` | claude-sonnet-4-5 | LLM 模型 |
 
