@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { net } from '../net.js';
 
-export function Home({ error }: { error: string | null }) {
+export function Home({ error, version }: { error: string | null; version: string | null }) {
   const [nickname, setNickname] = useState(localStorage.getItem('xzs-nick') ?? '');
   const [code, setCode] = useState('');
   const [seats, setSeats] = useState(3);
@@ -46,6 +46,7 @@ export function Home({ error }: { error: string | null }) {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+        {version && <p className="version">服务器 {version}</p>}
         <p className="hint">2 人玩法：建 4 色房间，每人认领 2 个颜色（官方 2 人变体）。</p>
       </div>
     </div>

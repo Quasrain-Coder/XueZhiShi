@@ -1,6 +1,7 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,8 +28,22 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
+const STARTED_AT = new Date().toISOString();
+const GIT_SHA = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+})();
+
 /** 单端口部署：同端口提供静态资源与 WS。 */
 const http = createServer((req, res) => {
+  if (req.url === '/api/version') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ sha: GIT_SHA, startedAt: STARTED_AT }));
+    return;
+  }
   if (!existsSync(WEB_DIST)) {
     res.writeHead(404).end('web 未构建（npm run build -w @xzs/web）');
     return;

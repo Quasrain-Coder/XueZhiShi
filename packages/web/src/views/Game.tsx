@@ -6,7 +6,7 @@ import { COLOR_CSS, COLOR_NAMES } from '../theme.js';
 import { BoardView } from '../components/BoardView.js';
 import { CardView } from '../components/CardView.js';
 
-export function Game({ room, state }: { room: RoomInfo; state: ViewState }) {
+export function Game({ room, state, version }: { room: RoomInfo; state: ViewState; version: string | null }) {
   const yours = state.yours ?? [];
   const [activeSeat, setActiveSeat] = useState<ColorId | null>(null);
   const [healerPick, setHealerPick] = useState<CharacterCard[]>([]);
@@ -60,6 +60,7 @@ export function Game({ room, state }: { room: RoomInfo; state: ViewState }) {
         </span>
         <span>
           {yours.length > 0 && `你的座位：${yours.map((c) => COLOR_NAMES[c]).join('、')}`}
+          <span className="version-inline">{version ?? ''}</span>
           <button className="link" onClick={() => net.leave()}>
             离开
           </button>
