@@ -15,7 +15,7 @@ M1–M4 基础版已落地：
 - **M1 规则引擎** `packages/engine`：纯函数、零依赖，19 个 vitest 用例（含规则书 p.5 官方示例复现）
 - **M2 服务器** `packages/server`：权威 WS + 房间短码 + 断线重连 + node:sqlite 落库；单端口托管静态资源
 - **M3 客户端** `packages/web`：React + Vite，原版美术（规则书扫描件裁切）
-- **M4 AI 座位**：启发式 AI + 可选 Claude LLM（`ANTHROPIC_API_KEY`）
+- **M4 AI 座位**：蒙特卡洛模拟 AI（默认）+ 启发式（备用）+ 可选 Claude LLM（`ANTHROPIC_API_KEY`）
 - **M5 复盘**：预留（对局与 action log 已落库）
 
 ## Quick start

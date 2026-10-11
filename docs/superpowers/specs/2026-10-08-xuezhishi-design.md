@@ -74,9 +74,15 @@ newGame(colors, seed): GameState
 原则：LLM 只做「选择」，规则结算永远在引擎。
 
 - `PlayerAgent` 接口：`chooseAction(state, legalActions, seat) → Action`
-- `RandomAgent`（测试）、`HeuristicAgent`（默认）：按果实期望/战斗风险/法力站位/手牌管理打分，watcher/healer 用简单规则
-- `ClaudeAgent`（可选，`ANTHROPIC_API_KEY`）：结构化局势摘要 + 候选行动列表，tool use 强制返回候选编号；非法 → 重试一次 → 降级 Heuristic
-- 服务器在 AI 座位需要决策时驱动 agent，连续异常降级 Heuristic，对局永不卡死
+- `RandomAgent`（测试）、`HeuristicAgent`（轻量打分，备用）、`SimulationAgent`（默认 AI）：
+  利用「亮牌后结算完全确定、对手手牌公开可推算」的特性，submit 阶段对每张候选牌
+  采样 K 组对手暗拍（按静态价值加权），用引擎精确模拟整回合结算取期望收益最大者；
+  watcher/healer 阶段信息全知，逐候选精确模拟取最优。收益函数：自身计分轨进展为主，
+  弃牌损失/对手进展/手牌弹性为辅。采样用注入种子保证确定性（重放一致）
+- `ClaudeAgent`（可选，`ANTHROPIC_API_KEY`）：结构化局势摘要 + 候选行动列表，tool use 强制返回候选编号；非法 → 重试一次 → 降级 SimulationAgent
+- 服务器在 AI 座位需要决策时驱动 agent，连续异常降级，对局永不卡死
+- 基准：`packages/llm/bench/sim-bench.ts`（`npx tsx bench/sim-bench.ts [局数] [采样数]`），
+  2026-10-09 测定 SimulationAgent 对 HeuristicAgent 胜率 6/6，平均 ~0.26s/决策（60 采样）
 
 ## 6. 客户端（web）
 

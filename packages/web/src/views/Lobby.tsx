@@ -20,13 +20,13 @@ export function Lobby({ room }: { room: RoomInfo }) {
                   : '（待认领）'
                 : s.kind === 'llm'
                   ? 'Claude LLM'
-                  : '启发式 AI'}
+                  : '模拟 AI'}
             </span>
             <span className="seat-actions">
               {s.kind === 'human' && !s.nickname && (
                 <>
                   <button onClick={() => net.send({ type: 'claim-seat', color: s.color })}>认领</button>
-                  <button onClick={() => net.send({ type: 'set-seat-kind', color: s.color, kind: 'heuristic' })}>
+                  <button onClick={() => net.send({ type: 'set-seat-kind', color: s.color, kind: 'ai' })}>
                     AI
                   </button>
                   <button onClick={() => net.send({ type: 'set-seat-kind', color: s.color, kind: 'llm' })}>LLM</button>

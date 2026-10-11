@@ -1,7 +1,7 @@
 import type { Action, ColorId, GameState } from '@xzs/engine';
 
-/** 座位类型：人类或 AI。 */
-export type SeatKind = 'human' | 'heuristic' | 'llm';
+/** 座位类型：人类 / 模拟 AI / LLM AI。 */
+export type SeatKind = 'human' | 'ai' | 'llm';
 
 export interface SeatInfo {
   color: ColorId;

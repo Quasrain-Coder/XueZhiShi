@@ -1,6 +1,6 @@
 import { COLORS, type Action, type ColorId, type GameState, applyAction, enumerateActions, newGame } from '@xzs/engine';
 import type { RoomInfo, SeatInfo, SeatKind, ViewState } from '@xzs/protocol';
-import { ClaudeAgent, HeuristicAgent, type PlayerAgent } from '@xzs/llm';
+import { ClaudeAgent, SimulationAgent, type PlayerAgent } from '@xzs/llm';
 import { randomBytes } from 'node:crypto';
 import type { GameStore } from './db.js';
 
@@ -119,13 +119,13 @@ export class Room {
     this.gameId = this.store.createGame(this.code, seed, this.seats.map((s) => s.color));
     for (const s of this.seats) {
       this.store.saveSeat(this.gameId, s.color, s.nickname || s.color, s.token);
-      if (s.kind === 'heuristic') this.agents.set(s.color, new HeuristicAgent());
+      if (s.kind === 'ai') this.agents.set(s.color, new SimulationAgent());
       if (s.kind === 'llm') {
         try {
           this.agents.set(s.color, new ClaudeAgent());
         } catch {
-          this.agents.set(s.color, new HeuristicAgent());
-          s.kind = 'heuristic';
+          this.agents.set(s.color, new SimulationAgent());
+          s.kind = 'ai';
           s.nickname = 'AI';
         }
       }
@@ -159,7 +159,7 @@ export class Room {
       try {
         action = await agent.chooseAction(this.state, seatLegal, aiAction.player);
       } catch {
-        action = await new HeuristicAgent().chooseAction(this.state, seatLegal, aiAction.player);
+        action = await new SimulationAgent().chooseAction(this.state, seatLegal, aiAction.player);
       }
       try {
         this.apply(aiAction.player, action);
