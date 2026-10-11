@@ -1,8 +1,8 @@
 // 对局基准：
 //   npx tsx bench/sim-bench.ts [games] [samples] [mode]
-//   mode: vs-heuristic（默认，对启发式胜率） | selfplay（自对局，统计 AI 多样性）
+//   mode: vs-heuristic（默认） | selfplay（自对局多样性） | ab（新旧配置同场对抗）
 // 环境变量 XZS_BENCH_TEMP 可对比不同温度（0.01 ≈ 纯 argmax）。
-import { applyAction, enumerateActions, newGame, isCharacter, type Action, type ColorId, type GameState } from '@xzs/engine';
+import { agentViewFor, applyAction, enumerateActions, newGame, isCharacter, type Action, type ColorId, type GameState } from '@xzs/engine';
 import { HeuristicAgent, SimulationAgent, type PlayerAgent } from '../src/index.js';
 
 const SEATS: ColorId[] = ['red', 'blue', 'yellow', 'gray'];
@@ -37,7 +37,7 @@ async function playGame(agents: Record<ColorId, PlayerAgent>, seed: number): Pro
     const legal = enumerateActions(s);
     if (legal.length === 0) throw new Error('卡死');
     const seat = legal[0]!.player;
-    const a = await agents[seat]!.chooseAction(s, legal.filter((x) => x.player === seat), seat);
+    const a = await agents[seat]!.chooseAction(agentViewFor(s, seat), legal.filter((x) => x.player === seat), seat);
     if (s.phase === 'submit') record(a);
     if (s.round !== lastRound) {
       // 回合推进：结算上回合的同质化指标
@@ -70,14 +70,39 @@ let totalRounds = 0;
 let totalCollide = 0;
 let totalAllSame = 0;
 let totalPlayed = 0;
+// ab 模式：A = 旧配置（单步/无终局权重）；B 由 XZS_AB_B 指定（both|leader|lookahead）
+const bOpts =
+  process.env.XZS_AB_B === 'leader'
+    ? { lookahead: false, leaderAware: true }
+    : process.env.XZS_AB_B === 'lookahead'
+      ? { lookahead: true, leaderAware: false }
+      : {};
+const mkA = () => new SimulationAgent(samples, temp, 6, { lookahead: false, leaderAware: false });
+const mkB = () => new SimulationAgent(samples, temp, 6, bOpts);
 for (let i = 0; i < games; i++) {
   const sim = new SimulationAgent(samples, temp);
   const agents: Record<ColorId, PlayerAgent> =
     mode === 'selfplay'
       ? { red: sim, blue: new SimulationAgent(samples, temp), yellow: sim, gray: new SimulationAgent(samples, temp) }
-      : i % 2 === 0
-        ? { red: sim, yellow: sim, blue: new HeuristicAgent(), gray: new HeuristicAgent() }
-        : { red: new HeuristicAgent(), yellow: new HeuristicAgent(), blue: sim, gray: sim };
+      : mode === 'ab'
+        ? i % 2 === 0
+            ? {
+                // A（旧：单步/无终局权重）坐 red/yellow，B（新配置）坐 blue/gray
+                red: mkA(),
+                yellow: mkA(),
+                blue: mkB(),
+                gray: mkB(),
+              }
+            : {
+                // 交换座次消除结算顺序偏差
+                red: mkB(),
+                yellow: mkB(),
+                blue: mkA(),
+                gray: mkA(),
+              }
+        : i % 2 === 0
+          ? { red: sim, yellow: sim, blue: new HeuristicAgent(), gray: new HeuristicAgent() }
+          : { red: new HeuristicAgent(), yellow: new HeuristicAgent(), blue: sim, gray: sim };
   const stat = await playGame(agents, 1000 + i * 37);
   totalMs += stat.ms;
   totalDecisions += stat.decisions;
@@ -86,14 +111,18 @@ for (let i = 0; i < games; i++) {
   totalAllSame += stat.allSameRounds;
   totalPlayed += stat.playedRounds;
   const mine: ColorId[] =
-    mode === 'selfplay' ? SEATS : i % 2 === 0 ? ['red', 'yellow'] : ['blue', 'gray'];
+    mode === 'ab'
+      ? i % 2 === 0 ? ['blue', 'gray'] : ['red', 'yellow']
+      : mode === 'selfplay' ? SEATS : i % 2 === 0 ? ['red', 'yellow'] : ['blue', 'gray'];
   if (stat.winner && mine.includes(stat.winner)) wins++;
   console.log(
     `game ${i + 1}/${games}: winner=${stat.winner} ${stat.ms}ms ${stat.rounds}回合 撞层${stat.collideRounds}`,
   );
 }
-console.log(`\n[mode=${mode} T=${temp} samples=${samples}]`);
-if (mode !== 'selfplay') {
+console.log(`\n[mode=${mode} T=${temp} samples=${samples}${mode === 'ab' ? ' B=' + JSON.stringify(bOpts) : ''}]`);
+if (mode === 'ab') {
+  console.log(`新配置（前瞻+终局权重）胜率: ${wins}/${games} = ${((wins / games) * 100).toFixed(0)}%`);
+} else if (mode !== 'selfplay') {
   console.log(`SimulationAgent 胜率: ${wins}/${games} = ${((wins / games) * 100).toFixed(0)}%`);
 } else {
   console.log(

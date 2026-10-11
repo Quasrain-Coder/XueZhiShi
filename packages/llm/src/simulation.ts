@@ -1,4 +1,5 @@
 import {
+  LAST_SPACE,
   applyAction,
   enumerateActions,
   isCharacter,
@@ -31,10 +32,13 @@ import type { PlayerAgent } from './index.js';
 export class SimulationAgent implements PlayerAgent {
   readonly name = 'simulation';
   constructor(
-    private samples = Number(process.env.XZS_AI_SAMPLES ?? 120),
+    private samples = Number(process.env.XZS_AI_SAMPLES ?? 100),
     private temperature = Number(process.env.XZS_AI_TEMPERATURE ?? 4),
     private margin = Number(process.env.XZS_AI_MARGIN ?? 6),
-  ) {}
+    private opts: { lookahead?: boolean; leaderAware?: boolean } = {},
+  ) {
+    this.opts = { lookahead: true, leaderAware: true, ...opts };
+  }
 
   async chooseAction(state: GameState, legal: Action[], seat: ColorId): Promise<Action> {
     if (legal.length === 1) return legal[0]!;
@@ -53,19 +57,89 @@ export class SimulationAgent implements PlayerAgent {
     // submit：采样对手暗拍；座位性格只影响近平局的取向
     let rng = mixSeed(base, seat, salt);
     let total = 0;
+    // 已暗扣但被视图隐藏的对手：牌堆无重复且弃牌/已用全公开，暗扣牌可精确推算（合法推理）。
+    // 直接注入重建真实状态，不走 applyAction（其手牌已是出牌后的状态）。
+    const hidden = new Map<ColorId, CardId>();
+    for (const p of base.players) {
+      if (p.color === seat || base.submissions[p.color] !== undefined) continue;
+      if (p.hand.length === 0) {
+        const c = unaccountedCard(base, p.color) ?? 'healer';
+        hidden.set(p.color, c);
+      }
+    }
+    const baseWithHidden: GameState = { ...base, submissions: { ...base.submissions } };
+    for (const [c, card] of hidden) baseWithHidden.submissions[c] = card;
     for (let k = 0; k < this.samples; k++) {
       const plays = new Map<ColorId, CardId>([[seat, action.card]]);
       for (const p of base.players) {
-        if (p.color === seat || base.submissions[p.color] !== undefined) continue;
+        if (p.color === seat || baseWithHidden.submissions[p.color] !== undefined) continue;
         const r = nextRandom(rng);
         rng = r.state;
         plays.set(p.color, sampleOpponentCard(base, p.color, r.value));
       }
-      const sim = applyAllSubmissions(base, plays);
-      total += payoff(base, autoResolve(sim), seat);
+      const sim = applyAllSubmissions(baseWithHidden, plays);
+      const resolved = autoResolve(sim);
+      let v = payoff(base, resolved, seat, this.opts.leaderAware);
+      // 第二回合前瞻：感知牌经济性（现在把高点牌打光，下回合就够不到高层果实）。
+      // 下回合骰子已在 resolveRound 滚定（同一 rng 路径），无额外随机性
+      if (this.opts.lookahead && resolved.phase !== 'finished') {
+        const ro = this.rolloutOnce(resolved, seat, rng);
+        v += 0.6 * payoff(resolved, ro.state, seat, this.opts.leaderAware);
+        rng = ro.rng;
+      }
+      total += v;
     }
     return total / this.samples + personaBias(seat, action.card);
   }
+
+  /** 便宜的第二回合推演：全部座位按静态价值出牌（自己 argmax，对手采样），引擎结算。 */
+  private rolloutOnce(state: GameState, seat: ColorId, rng: number): { state: GameState; rng: number } {
+    let s = state;
+    let r = rng;
+    const plays = new Map<ColorId, CardId>();
+    for (const p of state.players) {
+      if (p.hand.length === 0) continue;
+      if (p.color === seat) {
+        // 自己：静态价值最高的牌（代理未来最优）
+        let bestCard = p.hand[0]!;
+        let bestV = -Infinity;
+        for (const c of p.hand) {
+          const v = staticScore(state, p.color, c) + personaBias(p.color, c);
+          if (v > bestV) {
+            bestV = v;
+            bestCard = c;
+          }
+        }
+        plays.set(p.color, bestCard);
+      } else {
+        const n = nextRandom(r);
+        r = n.state;
+        plays.set(p.color, sampleOpponentCard(state, p.color, n.value));
+      }
+    }
+    s = applyAllSubmissions(state, plays);
+    return { state: autoResolve(s), rng: r };
+  }
+}
+
+/** 全套牌（每色 10 张）。 */
+const FULL_DECK: CardId[] = [1, 2, 3, 4, 5, 6, 7, 'healer', 'watcher', 'blizzard'];
+
+/**
+ * 推算已暗扣但手牌打光的对手的暗扣牌：
+ * 10 − 公开弃牌 − 已用特殊牌 − 手牌 − 已亮牌 = 唯一未销账的牌。
+ * 无法唯一确定时返回 null（理论上不会发生）。
+ */
+function unaccountedCard(state: GameState, color: ColorId): CardId | null {
+  const p = playerOf(state, color);
+  const left = FULL_DECK.filter(
+    (c) =>
+      !p.discard.includes(c as never) &&
+      !p.usedSpecials.includes(c as never) &&
+      !p.hand.includes(c) &&
+      state.submissions[color] !== c,
+  );
+  return left.length === 1 ? left[0]! : null;
 }
 
 /** 确定性采样种子。 */
@@ -144,12 +218,12 @@ function staticScore(state: GameState, color: ColorId, card: CardId): number {
   }
 }
 
-/** 按座位顺序应用一组暗拍。 */
+/** 按座位顺序应用一组暗拍（防御：跳过已提交/非 submit 阶段）。 */
 function applyAllSubmissions(state: GameState, plays: Map<ColorId, CardId>): GameState {
   let s = state;
   for (const p of state.players) {
     const card = plays.get(p.color);
-    if (card !== undefined && s.phase === 'submit') {
+    if (card !== undefined && s.phase === 'submit' && s.submissions[p.color] === undefined) {
       s = applyAction(s, { type: 'submit-card', player: p.color, card });
     }
   }
@@ -168,15 +242,25 @@ export function autoResolve(state: GameState, depth = 0): GameState {
     if (legal.length === 0) break;
     const seat = legal[0]!.player;
     const seatLegal = legal.filter((a) => a.player === seat);
-    let best = seatLegal[0]!;
-    let bestV = -Infinity;
-    for (const a of seatLegal) {
-      const after = applyAction(s, a);
-      const resolved = after.phase === 'watcher' || after.phase === 'healer' ? autoResolve(after, depth + 1) : after;
-      const v = payoff(s, resolved, seat);
-      if (v > bestV) {
-        bestV = v;
-        best = a;
+    let best: Action;
+    if (seatLegal[0]!.type === 'healer-recover') {
+      // Healer 子决策用廉价启发式：回收静态价值最高的 2 张。
+      // （精确评估代价是「组合数 × 递归模拟 × 采样 × 候选」的大乘数，
+      // 而 Healer 选择对本回合结算几乎无影响——只改手牌构成）
+      best = cheapHealerPick(s, seatLegal);
+    } else {
+      // Watcher 追加：候选少，保持精确评估（发现收割/避险杀招）
+      best = seatLegal[0]!;
+      let bestV = -Infinity;
+      for (const a of seatLegal) {
+        const after = applyAction(s, a);
+        const resolved =
+          after.phase === 'watcher' || after.phase === 'healer' ? autoResolve(after, depth + 1) : after;
+        const v = payoff(s, resolved, seat);
+        if (v > bestV) {
+          bestV = v;
+          best = a;
+        }
       }
     }
     s = applyAction(s, best);
@@ -184,15 +268,34 @@ export function autoResolve(state: GameState, depth = 0): GameState {
   return s;
 }
 
+function cheapHealerPick(s: GameState, seatLegal: Action[]): Action {
+  let best = seatLegal[0]!;
+  let bestV = -Infinity;
+  for (const a of seatLegal) {
+    if (a.type !== 'healer-recover') continue;
+    const v = a.cards.reduce(
+      (sum, c) => sum + (s.treeFruit[c - 1] ?? 0) * 2 + (c <= 2 ? 0.8 : 0) + c * 0.05,
+      a.cards.length * 0.5,
+    );
+    if (v > bestV) {
+      bestV = v;
+      best = a;
+    }
+  }
+  return best;
+}
+
 /**
  * 收益函数：自己计分轨进展为主，弃牌损失与对手进展为辅。
  */
-export function payoff(before: GameState, after: GameState, seat: ColorId): number {
+export function payoff(before: GameState, after: GameState, seat: ColorId, leaderAware = true): number {
   if (after.winner === seat) return 10000;
   if (after.winner !== null) return -10000;
   const meA = playerOf(after, seat);
   const meB = playerOf(before, seat);
-  let v = (meA.trackPos - meB.trackPos) * 10;
+  // 终局紧迫感：自己越接近终点，每一分越值钱
+  const myUrgency = leaderAware ? 1 + 0.8 * (meB.trackPos / LAST_SPACE) : 1;
+  let v = (meA.trackPos - meB.trackPos) * 10 * myUrgency;
   // 角色牌被打入弃牌堆 = 节奏损失（需 Healer 回收）
   v -= (meA.discard.length - meB.discard.length) * 1.5;
   // 用完一次性特殊牌的机会成本（Watcher/Blizzard 比 Healer 值钱）
@@ -201,10 +304,12 @@ export function payoff(before: GameState, after: GameState, seat: ColorId): numb
   }
   // 手牌弹性
   v += (meA.hand.filter(isCharacter).length - meB.hand.filter(isCharacter).length) * 0.4;
-  // 对手进展施压
+  // 对手进展施压：领先者（接近终点）的每一分更伤，二次曲线强化终局压制意识
   for (const p of after.players) {
     if (p.color === seat) continue;
-    v -= (p.trackPos - playerOf(before, p.color).trackPos) * 1.2;
+    const oppB = playerOf(before, p.color);
+    const w = leaderAware ? 1.2 + 5 * Math.pow(oppB.trackPos / LAST_SPACE, 2) : 1.2;
+    v -= (p.trackPos - oppB.trackPos) * w;
   }
   return v;
 }

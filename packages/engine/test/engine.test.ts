@@ -5,6 +5,7 @@ import {
   type ColorId,
   type GameState,
   LAST_SPACE,
+  agentViewFor,
   applyAction,
   enumerateActions,
   newGame,
@@ -33,6 +34,37 @@ function submitAll(s: GameState, cards: Partial<Record<ColorId, CardId>>): GameS
   }
   return s;
 }
+
+describe('agentViewFor（AI 反作弊视图）', () => {
+  it('未亮牌前看不到他人暗扣，亮牌后公开', () => {
+    let s = newGame(['red', 'blue'], 42);
+    s = applyAction(s, { type: 'submit-card', player: 'red', card: 5 });
+    const v = agentViewFor(s, 'blue');
+    expect(v.submissions['red']).toBeUndefined(); // 看不到 red 的暗扣
+    // 用 watcher 拉住回合：亮牌后不立即结算
+    s = newGame(['red', 'blue'], 42);
+    for (const p of s.players) p.hand = ['watcher', 5, 6];
+    s = applyAction(s, { type: 'submit-card', player: 'red', card: 'watcher' });
+    s = applyAction(s, { type: 'submit-card', player: 'blue', card: 5 });
+    expect(s.revealed).toBe(true);
+    expect(s.phase).toBe('watcher');
+    const v2 = agentViewFor(s, 'red');
+    expect(v2.submissions['blue']).toBe(5); // 亮牌后公开
+    expect(v2.pendingWatcher).toEqual(['red']);
+  });
+
+  it('不泄露 pending 的 watcher 追加牌', () => {
+    let s = newGame(['red', 'blue'], 7);
+    for (const p of s.players) p.hand = ['watcher', 5, 6];
+    s = applyAction(s, { type: 'submit-card', player: 'red', card: 'watcher' });
+    s = applyAction(s, { type: 'submit-card', player: 'blue', card: 'watcher' });
+    s = applyAction(s, { type: 'watcher-play', player: 'red', card: 6 }); // red 先追加
+    const v = agentViewFor(s, 'blue');
+    expect(v.watcherCards['red']).toBeUndefined(); // blue 尚未追加，red 的追加牌仍保密
+    const own = agentViewFor(s, 'red');
+    expect(own.watcherCards['red']).toBe(6);
+  });
+});
 
 describe('newGame / 放果实', () => {
   it('初始状态：10 张手牌、位置 0、回合 1、已放果实', () => {

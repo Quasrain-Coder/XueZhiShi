@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, enumerateActions, newGame, playerOf, type CardId, type ColorId } from '@xzs/engine';
+import { agentViewFor, applyAction, enumerateActions, newGame, playerOf, type CardId, type ColorId } from '@xzs/engine';
 import { HeuristicAgent, SimulationAgent, boltzmannPick, personaBias, type PlayerAgent } from '../src/index.js';
 
 const SEATS: ColorId[] = ['red', 'blue', 'yellow', 'gray'];
@@ -11,7 +11,7 @@ async function playGame(agents: Partial<Record<ColorId, PlayerAgent>>, seed: num
     const legal = enumerateActions(s);
     if (legal.length === 0) throw new Error('卡死：无合法行动');
     const seat = legal[0]!.player;
-    const a = await agents[seat]!.chooseAction(s, legal.filter((x) => x.player === seat), seat);
+    const a = await agents[seat]!.chooseAction(agentViewFor(s, seat), legal.filter((x) => x.player === seat), seat);
     s = applyAction(s, a);
     steps++;
   }
@@ -60,7 +60,7 @@ describe('boltzmannPick / 多样性', () => {
       for (const p of s.players) p.hand = [3, 4, 5, 6];
       for (const seat of ['red', 'blue', 'yellow', 'gray'] as ColorId[]) {
         const a = await agent.chooseAction(
-          s,
+          agentViewFor(s, seat),
           enumerateActions(s).filter((x) => x.player === seat),
           seat,
         );
