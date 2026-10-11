@@ -467,3 +467,16 @@ select {
 .card-small .card-special-name {
   font-size: 8px;
 }
+
+.version {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.8;
+}
+.version-inline {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 10px;
+  opacity: 0.7;
+}
