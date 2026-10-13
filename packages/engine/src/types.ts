@@ -82,6 +82,10 @@ export interface GameState {
   lastDice: number[];
   winner: ColorId | null;
   log: LogEvent[];
+  /** AI 视图附加：本轮已暗扣但被隐藏的座位（引擎不读，仅供 agent 精确推算）。 */
+  hiddenSubmitted?: ColorId[];
+  /** AI 视图附加：Watcher 阶段已决定但被隐藏的追加牌座位。 */
+  hiddenWatcherExtras?: ColorId[];
 }
 
 export type Action =
